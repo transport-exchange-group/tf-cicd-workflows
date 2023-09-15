@@ -1,0 +1,252 @@
+name: Terraform Validate, Plan & Apply
+on:
+  workflow_call:
+    inputs:
+      account-id:
+        description: "The AWS account you are provisioning"
+        required: true
+        type: string
+
+      aws-region:
+        description: 'The AWS region to deploy to'
+        required: true
+        type: string
+
+      aws-role:
+        description: 'The AWS role to assume'
+        required: true
+        type: string
+
+      enable-readonly-role:
+        description: "Indicates we should use the readonly iam role"
+        required: false
+        type: boolean
+        default: true
+
+      runs-on:
+        default: 'ubuntu-latest'
+        description: 'The runner to use'
+        required: false
+        type: string
+
+      terraform-log-level:
+        default: ''
+        description: 'The log level of terraform'
+        required: false
+        type: string
+
+      terraform-state-key:
+        default: '${{ github.event.repository.name }}.tfstate'
+        description: 'The key of the terraform state'
+        required: false
+        type: string
+
+      terraform-values-file:
+        default: 'values/production.tfvars'
+        description: 'The values file to use'
+        required: false
+        type: string
+
+      terraform-version:
+        default: '1.5.2'
+        description: 'The version of terraform to use'
+        required: false
+        type: string
+
+env:
+  TF_LOG: ${{ inputs.terraform-log-level }}
+  AWS_WEB_IDENTITY_TOKEN_FILE: /tmp/web_identity_token_file
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  terraform-format:
+    name: "Terraform Format"
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.format.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Terraform Format
+        id: format
+        run: terraform fmt -check
+  terraform-lint:
+    name: "Terraform Lint"
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.lint.outcome }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      - name: Setup Linter
+        uses: terraform-linters/setup-tflint@v3
+      - name: Linter Initialize
+        run: tflint --init
+      - name: Linting Code
+        id: lint
+        run: tflint -f compact
+  terraform-plan:
+    name: "Terraform Plan"
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ${{ inputs.runs-on }}
+    outputs:
+      result-auth: ${{ steps.auth.outcome }}
+      result-init: ${{ steps.init.outcome }}
+      result-validate: ${{ steps.validate.outcome }}
+      result-plan: ${{ steps.plan.outcome }}
+      plan-stdout: ${{ steps.plan.outputs.stdout }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Retrieve Web Identity Token for AWS Authentication
+        run: |
+          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
+      - name: Authenticate with AWS
+        id: auth
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          role-session-name: ${{ github.event.repository.name }}
+          role-to-assume: arn:aws:iam::${{ inputs.account-id }}:role/${{ inputs.aws-role }}${{ enable_readonly_role && "-ro" || ""}}
+          mask-aws-account-id: 'no'
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend-config="bucket=${{ inputs.account-id }}-${{ input.region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.account-id }}-${{ inputs.region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+      - name: Terraform plan
+        id: plan
+        run: |
+          terraform plan -var-file=${{ inputs.terraform-values-file }} -var="provider_role_name=${{ inputs.aws-role }}${{ enable_readonly_role && "-ro" || ""}}" -no-color -input=false -out=tfplan
+      - name: Upload tfplan
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan
+          path: tfplan
+  update-pr:
+    name: "Update PR"
+    if: github.event_name == 'pull_request' && (success() || failure())
+    runs-on: ubuntu-latest
+    needs:
+      - terraform-format
+      - terraform-lint
+      - terraform-plan
+    steps:
+      - name: Add PR Comment
+        uses: actions/github-script@v6
+        env:
+          PLAN: "${{ needs.terraform-plan.outputs.plan-stdout }}"
+        with:
+          script: |
+            // 1. Retrieve existing bot comments for the PR
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            })
+            const botComment = comments.find(comment => {
+              return comment.user.type === 'Bot' && comment.body.includes('Pull Request Review Status')
+            })
+
+            // 2. Check output length
+            const PLAN = process.env.PLAN || '';
+            const excludedStrings = ["Refreshing state...", "Reading...", "Read complete after"];
+            const filteredLines = PLAN.split('\n').filter(line =>
+              !excludedStrings.some(excludedStr => line.includes(excludedStr))
+            );
+            var planOutput = filteredLines.join('\n').trim();
+            if (planOutput.length < 1 || planOutput.length > 65000) {
+              planOutput = "Terraform Plan output is too large, please view the workflow run logs directly."
+            }
+
+            // 3. Prepare format of the comment
+            const output = `### Pull Request Review Status
+            * 🖌  <b>Terraform Format and Style:</b> \`${{ needs.terraform-format.outputs.result }}\`
+            * 🔍 <b>Terraform Linting:</b>          \`${{ needs.terraform-lint.outputs.result }}\`
+            * 🔑 <b>AWS Authentication:</b>         \`${{ needs.terraform-plan.outputs.result-auth }}\`
+            * 🔧 <b>Terraform Initialisation:</b>   \`${{ needs.terraform-plan.outputs.result-init }}\`
+            * 🤖 <b>Terraform Validation:</b>       \`${{ needs.terraform-plan.outputs.result-validate }}\`
+            * 📖 <b>Terraform Plan:</b>             \`${{ needs.terraform-plan.outputs.result-plan }}\`
+
+            <details><summary><b>Output: 📖 Terraform Plan</b></summary>
+
+            \`\`\`
+            ${planOutput}
+            \`\`\`
+            </details>
+
+            *<b>Pusher:</b> @${{ github.actor }}, <b>Action:</b> \`${{ github.event_name }}\`*
+            *<b>Workflow Run Link:</b> ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}*`;
+
+            // 4. If we have a comment, update it, otherwise create a new one
+            if (botComment) {
+              github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output
+              })
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              })
+            }
+
+  terraform-apply:
+    name: "Terraform Apply"
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ${{ inputs.runs-on }}
+    needs:
+      - terraform-format
+      - terraform-lint
+      - terraform-plan
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+      - name: Retrieve Web Identity Token for AWS Authentication
+        run: |
+          curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
+      - name: Authenticate with AWS
+        id: auth
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          role-session-name: ${{ github.event.repository.name }}
+          role-to-assume: ${{ inputs.aws-role  }}
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend-config="bucket=${{ inputs.account-id }}-${{ input.region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.account-id }}-${{ inputs.region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
+      - name: Download tfplan
+        uses: actions/download-artifact@v3
+        with:
+          name: tfplan
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false tfplan
