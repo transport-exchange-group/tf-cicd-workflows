@@ -17,12 +17,6 @@ on:
         required: true
         type: string
 
-      enable-readonly-role:
-        description: "Indicates we should use the readonly iam role"
-        required: false
-        type: boolean
-        default: true
-
       runs-on:
         default: 'ubuntu-latest'
         description: 'The runner to use'
@@ -123,7 +117,7 @@ jobs:
         with:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: arn:aws:iam::${{ inputs.account-id }}:role/${{ inputs.aws-role }}${{ enable_readonly_role && "-ro" || ""}}
+          role-to-assume: arn:aws:iam::${{ inputs.account-id }}:role/${{ inputs.aws-role }}-ro
           mask-aws-account-id: 'no'
       - name: Terraform Init
         id: init
@@ -134,7 +128,7 @@ jobs:
       - name: Terraform plan
         id: plan
         run: |
-          terraform plan -var-file=${{ inputs.terraform-values-file }} -var="provider_role_name=${{ inputs.aws-role }}${{ enable_readonly_role && "-ro" || ""}}" -no-color -input=false -out=tfplan
+          terraform plan -var-file=${{ inputs.terraform-values-file }} -var="provider_role_name=${{ inputs.aws-role }}-ro" -no-color -input=false -out=tfplan
       - name: Upload tfplan
         uses: actions/upload-artifact@v3
         with:
