@@ -126,13 +126,13 @@ jobs:
       - name: Terraform Validate
         id: validate
         run: terraform validate -no-color
-      - name: Terraform plan
+      - name: Terraform Plan
         id: plan
         env:
           TF_VAR_provider_role_name: "${{ inputs.aws-role }}-ro"
         run: |
           terraform plan -var-file=${{ inputs.terraform-values-file }} -no-color -input=false -out=tfplan
-      - name: Upload tfplan
+      - name: Upload Terraform Plan
         uses: actions/upload-artifact@v3
         with:
           name: tfplan
@@ -237,7 +237,7 @@ jobs:
         with:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: ${{ inputs.aws-role  }}
+          role-to-assume: arn:aws:iam::${{ inputs.account-id }}:role/${{ inputs.aws-role }}
       - name: Terraform Init
         id: init
         run: terraform init -backend-config="bucket=${{ inputs.account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
