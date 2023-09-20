@@ -112,11 +112,10 @@ jobs:
       - name: Determine AWS Role
         id: role
         run: |
-          aws_assume_role=${{ inputs.aws-role }}
           if [[ "${GITHUB_REF##*/}" == "main" ]]; then
-            echo "::set-output name=AWS_ASSUME_ROLE::${{ inputs.aws-role }}"
+            echo "AWS_ASSUME_ROLE=${{ inputs.aws-role }}" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=AWS_ASSUME_ROLE::${{ inputs.aws-role }}-ro"
+            echo "AWS_ASSUME_ROLE=${{ inputs.aws-role }}-ro" >> $GITHUB_OUTPUT
           fi
       - name: Retrieve Web Identity Token for AWS Authentication
         run: |
@@ -250,7 +249,7 @@ jobs:
       - name: Terraform Init
         id: init
         run: terraform init -backend-config="bucket=${{ inputs.account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
-      - name: Download tfplan
+      - name: Download Terraform Plan
         uses: actions/download-artifact@v3
         with:
           name: tfplan
