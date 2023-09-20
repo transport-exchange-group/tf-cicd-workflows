@@ -109,6 +109,15 @@ jobs:
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: ${{ inputs.terraform-version }}
+      - name: Determine AWS Role
+        id: role
+        run: |
+          aws_assume_role=${{ inputs.aws-role }}
+          if [[ "${GITHUB_REF##*/}" == "main" ]]; then
+            echo "::set-output name=AWS_ASSUME_ROLE::${{ inputs.aws-role }}"
+          else
+            echo "::set-output name=AWS_ASSUME_ROLE::${{ inputs.aws-role }}-ro"
+          fi
       - name: Retrieve Web Identity Token for AWS Authentication
         run: |
           curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
@@ -118,7 +127,7 @@ jobs:
         with:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
-          role-to-assume: arn:aws:iam::${{ inputs.account-id }}:role/${{ inputs.aws-role }}-ro
+          role-to-assume: arn:aws:iam::${{ inputs.account-id }}:role/${{ steps.role.outputs.AWS_ASSUME_ROLE }}
           mask-aws-account-id: 'no'
       - name: Terraform Init
         id: init
@@ -129,7 +138,7 @@ jobs:
       - name: Terraform Plan
         id: plan
         env:
-          TF_VAR_provider_role_name: "${{ inputs.aws-role }}-ro"
+          TF_VAR_provider_role_name: "${{ steps.role.outputs.AWS_ASSUME_ROLE }}"
         run: |
           terraform plan -var-file=${{ inputs.terraform-values-file }} -no-color -input=false -out=tfplan
       - name: Upload Terraform Plan
