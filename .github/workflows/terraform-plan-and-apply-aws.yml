@@ -129,7 +129,7 @@ jobs:
       - name: Terraform plan
         id: plan
         env:
-          TF_VAR_provider_role_name="${{ inputs.aws_role_name }}-ro"
+          TF_VAR_provider_role_name: "${{ inputs.aws_role_name }}-ro"
         run: |
           terraform plan -var-file=${{ inputs.terraform-values-file }} -no-color -input=false -out=tfplan
       - name: Upload tfplan
@@ -247,5 +247,5 @@ jobs:
           name: tfplan
       - name: Terraform Apply
         env:
-          TF_VAR_provider_role_name="${{ inputs.aws_role_name }}"
+          TF_VAR_provider_role_name: "${{ inputs.aws_role_name }}"
         run: terraform apply -auto-approve -input=false tfplan
