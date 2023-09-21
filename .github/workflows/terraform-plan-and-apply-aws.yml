@@ -122,7 +122,7 @@ jobs:
           curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
       - name: Authenticate with AWS
         id: auth
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
@@ -241,7 +241,7 @@ jobs:
           curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value' > $AWS_WEB_IDENTITY_TOKEN_FILE
       - name: Authenticate with AWS
         id: auth
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
