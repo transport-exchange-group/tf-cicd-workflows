@@ -2,6 +2,10 @@
 
 This GitHub Actions workflow template ([terraform-plan-and-apply-aws.yml](../.github/workflows/terraform-plan-and-apply-aws.yml)) can be used with Terraform repositories to automate the deployment and management of AWS infrastructure. The workflow performs various steps such as authentication with AWS, Terraform formatting, initialization, validation, planning, and applying changes. It also adds the Terraform plan output as a comment to the associated pull request and triggers an apply action for pushes to the main branch.
 
+## Important Notice
+
+**The key within the shared terraform bucket is the repository name. This is assuming you are using a different repository per pipeline. Just something to be aware of if you have a mono-repo. Note, this value can be overridden if required**
+
 ## Workflow Steps
 
 1. **Setup Terraform:** Terraform is fetched at the specified version (overridable via inputs).
