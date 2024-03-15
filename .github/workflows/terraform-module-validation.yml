@@ -3,8 +3,8 @@ on:
   workflow_call:
     inputs:
       terraform-version:
-        default: '1.5.2'
-        description: 'The version of terraform to use'
+        default: "1.5.2"
+        description: "The version of terraform to use"
         required: false
         type: string
 
@@ -20,9 +20,9 @@ jobs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Format
@@ -35,7 +35,7 @@ jobs:
       result: ${{ steps.lint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Linter
         uses: terraform-linters/setup-tflint@v3
       - name: Linter Initialize
@@ -50,13 +50,13 @@ jobs:
       result: ${{ steps.init.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup node
         uses: actions/setup-node@v3
         with:
           node-version: 16
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Init
@@ -69,13 +69,13 @@ jobs:
       result: ${{ steps.validate.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup node
         uses: actions/setup-node@v3
         with:
           node-version: 16
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Init
@@ -91,7 +91,7 @@ jobs:
       result: ${{ steps.docs.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Terraform Docs
         id: docs
         uses: terraform-docs/gh-actions@v1.0.0
