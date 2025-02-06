@@ -9,42 +9,42 @@ on:
         type: string
 
       aws-region:
-        description: 'The AWS region to deploy to'
+        description: "The AWS region to deploy to"
         required: true
         type: string
 
       aws-role:
-        description: 'The AWS role to assume'
+        description: "The AWS role to assume"
         required: true
         type: string
 
       runs-on:
-        default: 'ubuntu-latest'
-        description: 'The runner to use'
+        default: "ubuntu-latest"
+        description: "The runner to use"
         required: false
         type: string
 
       terraform-log-level:
-        default: ''
-        description: 'The log level of terraform'
+        default: ""
+        description: "The log level of terraform"
         required: false
         type: string
 
       terraform-state-key:
-        default: '${{ github.event.repository.name }}.tfstate'
-        description: 'The key of the terraform state'
+        default: "${{ github.event.repository.name }}.tfstate"
+        description: "The key of the terraform state"
         required: false
         type: string
 
       terraform-values-file:
-        default: 'values/production.tfvars'
-        description: 'The values file to use'
+        default: "values/production.tfvars"
+        description: "The values file to use"
         required: false
         type: string
 
       terraform-version:
-        default: '1.5.2'
-        description: 'The version of terraform to use'
+        default: "1.5.2"
+        description: "The version of terraform to use"
         required: false
         type: string
 
@@ -65,9 +65,9 @@ jobs:
       result: ${{ steps.format.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Terraform Format
@@ -80,7 +80,7 @@ jobs:
       result: ${{ steps.lint.outcome }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup Linter
         uses: terraform-linters/setup-tflint@v3
       - name: Linter Initialize
@@ -100,13 +100,13 @@ jobs:
       plan-stdout: ${{ steps.plan.outputs.stdout }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 16
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Determine AWS Role
@@ -127,7 +127,7 @@ jobs:
           aws-region: ${{ inputs.aws-region }}
           role-session-name: ${{ github.event.repository.name }}
           role-to-assume: arn:aws:iam::${{ inputs.account-id }}:role/${{ steps.role.outputs.AWS_ASSUME_ROLE }}
-          mask-aws-account-id: 'no'
+          mask-aws-account-id: "no"
       - name: Terraform Init
         id: init
         run: terraform init -backend-config="bucket=${{ inputs.account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
@@ -227,13 +227,13 @@ jobs:
       - terraform-plan
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 16
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform-version }}
       - name: Retrieve Web Identity Token for AWS Authentication
@@ -250,7 +250,7 @@ jobs:
         id: init
         run: terraform init -backend-config="bucket=${{ inputs.account-id }}-${{ inputs.aws-region }}-tfstate" -backend-config="key=${{ inputs.terraform-state-key }}" -backend-config="encrypt=true" -backend-config="dynamodb_table=${{ inputs.account-id }}-${{ inputs.aws-region }}-tflock" -backend-config="region=${{ inputs.aws-region }}"
       - name: Download Terraform Plan
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: tfplan
       - name: Terraform Apply
